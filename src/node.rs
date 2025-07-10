@@ -26,6 +26,7 @@ pub struct NodeManager {
     binary_path: Option<std::path::PathBuf>,
     enable_profiling: bool,
     output_dir: PathBuf,
+    additional_reth_args: Vec<String>,
 }
 
 impl NodeManager {
@@ -39,6 +40,7 @@ impl NodeManager {
             binary_path: None,
             enable_profiling: args.profile,
             output_dir: args.output_dir_path(),
+            additional_reth_args: args.reth_args.clone(),
         }
     }
 
@@ -104,6 +106,9 @@ impl NodeManager {
             "--http.api".to_string(),
             "eth".to_string(),
         ]);
+
+        // Add any additional arguments passed via command line
+        reth_args.extend_from_slice(&self.additional_reth_args);
 
         (reth_args, chain_str)
     }
@@ -176,6 +181,11 @@ impl NodeManager {
 
         let binary_path_str = binary_path.to_string_lossy();
         let (reth_args, _) = self.build_reth_args(&binary_path_str);
+
+        // Log additional arguments if any
+        if !self.additional_reth_args.is_empty() {
+            info!("Using additional reth arguments: {:?}", self.additional_reth_args);
+        }
 
         let mut cmd = if self.enable_profiling {
             self.create_profiling_command(git_ref, &reth_args).await?

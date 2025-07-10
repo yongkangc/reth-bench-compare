@@ -86,6 +86,13 @@ pub struct Args {
 
     #[command(flatten)]
     pub logs: LogArgs,
+
+    /// Additional arguments to pass to reth node command
+    ///
+    /// All arguments after `--` will be passed directly to the reth node command.
+    /// Example: `reth-bench-compare --baseline-ref main --feature-ref pr/123 -- --debug.tip 0xabc...`
+    #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+    pub reth_args: Vec<String>,
 }
 
 impl Args {

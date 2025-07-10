@@ -81,6 +81,22 @@ reth-bench-compare \
 - `--sudo`: Run reth with elevated privileges
 - `-v/-vv/-vvv`: Increase verbosity (debug output with -vvv)
 
+### Passing Additional Arguments to Reth
+
+You can pass additional arguments to the `reth node` command by using `--` followed by the arguments:
+
+```bash
+reth-bench-compare \
+  --baseline-ref main \
+  --feature-ref feature-branch \
+  --blocks 100 \
+  -- \
+  --debug.tip 0xabc123... \
+  --engine.legacy
+```
+
+All arguments after `--` will be passed directly to both reth node instances.
+
 ## Output Structure
 
 ```
