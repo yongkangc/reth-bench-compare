@@ -82,7 +82,11 @@ impl NodeManager {
     }
 
     /// Build reth arguments as a vector of strings
-    fn build_reth_args(&self, binary_path_str: &str, additional_args: &[String]) -> (Vec<String>, String) {
+    fn build_reth_args(
+        &self,
+        binary_path_str: &str,
+        additional_args: &[String],
+    ) -> (Vec<String>, String) {
         let mut reth_args = vec![binary_path_str.to_string(), "node".to_string()];
 
         // Add chain argument (skip for mainnet as it's the default)
@@ -109,7 +113,7 @@ impl NodeManager {
 
         // Add any additional arguments passed via command line (common to both baseline and feature)
         reth_args.extend_from_slice(&self.additional_reth_args);
-        
+
         // Add reference-specific additional arguments
         reth_args.extend_from_slice(additional_args);
 
@@ -281,10 +285,7 @@ impl NodeManager {
                     Ok(sync_result) => {
                         match sync_result {
                             SyncStatus::Info(sync_info)
-                                if sync_info.current_block != sync_info.highest_block
-                                    || sync_info.stages.as_ref().is_none_or(|stages| {
-                                        stages.windows(2).all(|w| w[0].block == w[1].block)
-                                    }) =>
+                                if sync_info.current_block != sync_info.highest_block =>
                             {
                                 debug!("Node is still syncing {sync_info:?}, waiting...");
                             }
@@ -474,7 +475,8 @@ impl NodeManager {
         }
 
         // Wait for the command to complete
-        let status = child.wait()
+        let status = child
+            .wait()
             .await
             .wrap_err("Failed to wait for unwind command")?;
 
