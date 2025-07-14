@@ -34,6 +34,7 @@ chrono = "0.4"
 
 # Path manipulation
 shellexpand = "3.0.0"
+shlex = "1.3"
 
 # CSV handling for results comparison
 csv = "1.3"

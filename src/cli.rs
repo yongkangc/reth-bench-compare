@@ -96,7 +96,19 @@ pub struct Args {
     #[command(flatten)]
     pub logs: LogArgs,
 
-    /// Additional arguments to pass to reth node command
+    /// Additional arguments to pass to baseline reth node command
+    ///
+    /// Example: `--baseline-args "--debug.tip 0xabc..."`
+    #[arg(long, value_name = "ARGS")]
+    pub baseline_args: Option<String>,
+
+    /// Additional arguments to pass to feature reth node command
+    ///
+    /// Example: `--feature-args "--debug.tip 0xdef..."`
+    #[arg(long, value_name = "ARGS")]
+    pub feature_args: Option<String>,
+
+    /// Additional arguments to pass to reth node command (applied to both baseline and feature)
     ///
     /// All arguments after `--` will be passed directly to the reth node command.
     /// Example: `reth-bench-compare --baseline-ref main --feature-ref pr/123 -- --debug.tip 0xabc...`
@@ -279,6 +291,14 @@ pub async fn run_comparison(args: Args, _ctx: CliContext) -> Result<()> {
     Ok(())
 }
 
+/// Parse a string of arguments into a vector of strings
+fn parse_args_string(args_str: &str) -> Vec<String> {
+    shlex::split(args_str).unwrap_or_else(|| {
+        // Fallback to simple whitespace splitting if shlex fails
+        args_str.split_whitespace().map(|s| s.to_string()).collect()
+    })
+}
+
 /// Execute the complete benchmark workflow for both branches
 async fn run_benchmark_workflow(
     git_manager: &GitManager,
@@ -312,8 +332,15 @@ async fn run_benchmark_workflow(
         // Get the binary path for this git reference
         let binary_path = compilation_manager.get_cached_binary_path(git_ref);
 
+        // Get reference-specific additional arguments
+        let additional_args = match ref_type {
+            "baseline" => args.baseline_args.as_ref().map(|s| parse_args_string(s)).unwrap_or_default(),
+            "feature" => args.feature_args.as_ref().map(|s| parse_args_string(s)).unwrap_or_default(),
+            _ => Vec::new(),
+        };
+
         // Start reth node
-        let mut node_process = node_manager.start_node(&binary_path, git_ref).await?;
+        let mut node_process = node_manager.start_node(&binary_path, git_ref, &additional_args).await?;
 
         // Wait for node to be ready and get its current tip (wherever it is)
         let current_tip = node_manager.wait_for_node_ready_and_get_tip().await?;

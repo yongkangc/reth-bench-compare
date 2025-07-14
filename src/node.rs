@@ -82,7 +82,7 @@ impl NodeManager {
     }
 
     /// Build reth arguments as a vector of strings
-    fn build_reth_args(&self, binary_path_str: &str) -> (Vec<String>, String) {
+    fn build_reth_args(&self, binary_path_str: &str, additional_args: &[String]) -> (Vec<String>, String) {
         let mut reth_args = vec![binary_path_str.to_string(), "node".to_string()];
 
         // Add chain argument (skip for mainnet as it's the default)
@@ -107,8 +107,11 @@ impl NodeManager {
             "eth".to_string(),
         ]);
 
-        // Add any additional arguments passed via command line
+        // Add any additional arguments passed via command line (common to both baseline and feature)
         reth_args.extend_from_slice(&self.additional_reth_args);
+        
+        // Add reference-specific additional arguments
+        reth_args.extend_from_slice(additional_args);
 
         (reth_args, chain_str)
     }
@@ -180,18 +183,25 @@ impl NodeManager {
         &mut self,
         binary_path: &std::path::Path,
         git_ref: &str,
+        additional_args: &[String],
     ) -> Result<tokio::process::Child> {
         // Store the binary path for later use (e.g., in unwind_to_block)
         self.binary_path = Some(binary_path.to_path_buf());
 
         let binary_path_str = binary_path.to_string_lossy();
-        let (reth_args, _) = self.build_reth_args(&binary_path_str);
+        let (reth_args, _) = self.build_reth_args(&binary_path_str, additional_args);
 
         // Log additional arguments if any
         if !self.additional_reth_args.is_empty() {
             info!(
-                "Using additional reth arguments: {:?}",
+                "Using common additional reth arguments: {:?}",
                 self.additional_reth_args
+            );
+        }
+        if !additional_args.is_empty() {
+            info!(
+                "Using reference-specific additional reth arguments: {:?}",
+                additional_args
             );
         }
 
