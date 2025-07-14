@@ -15,7 +15,7 @@ use tokio::{
     process::Command,
     time::{sleep, timeout},
 };
-use tracing::{debug, info};
+use tracing::{debug, info, warn};
 
 /// Manages reth node lifecycle and operations
 pub struct NodeManager {
@@ -44,14 +44,19 @@ impl NodeManager {
         }
     }
 
-    /// Get the perf event max sample rate from the system
+    /// Get the perf event max sample rate from the system, capped at 10000
     fn get_perf_sample_rate(&self) -> Option<String> {
         let perf_rate_file = "/proc/sys/kernel/perf_event_max_sample_rate";
         if let Ok(content) = fs::read_to_string(perf_rate_file) {
-            let rate = content.trim();
-            if !rate.is_empty() {
-                info!("Detected perf_event_max_sample_rate: {}", rate);
-                return Some(rate.to_string());
+            let rate_str = content.trim();
+            if !rate_str.is_empty() {
+                if let Ok(system_rate) = rate_str.parse::<u32>() {
+                    let capped_rate = std::cmp::min(system_rate, 10000);
+                    info!("Detected perf_event_max_sample_rate: {}, using: {}", system_rate, capped_rate);
+                    return Some(capped_rate.to_string());
+                } else {
+                    warn!("Failed to parse perf_event_max_sample_rate: {}", rate_str);
+                }
             }
         }
         None
