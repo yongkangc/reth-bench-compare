@@ -340,7 +340,7 @@ async fn run_benchmark_workflow(
         };
 
         // Start reth node
-        let mut node_process = node_manager.start_node(&binary_path, git_ref, &additional_args).await?;
+        let mut node_process = node_manager.start_node(&binary_path, git_ref, ref_type, &additional_args).await?;
 
         // Wait for node to be ready and get its current tip (wherever it is)
         let current_tip = node_manager.wait_for_node_ready_and_get_tip().await?;
@@ -463,18 +463,14 @@ async fn generate_comparison_charts(
 
 /// Start samply servers for viewing profiles
 async fn start_samply_servers(args: &Args) -> Result<()> {
-    use crate::git::sanitize_git_ref;
-
     info!("Starting samply servers for profile viewing...");
 
     let output_dir = args.output_dir_path();
     let profiles_dir = output_dir.join("profiles");
 
     // Build profile paths
-    let baseline_profile =
-        profiles_dir.join(format!("{}.json.gz", sanitize_git_ref(&args.baseline_ref)));
-    let feature_profile =
-        profiles_dir.join(format!("{}.json.gz", sanitize_git_ref(&args.feature_ref)));
+    let baseline_profile = profiles_dir.join("baseline.json.gz");
+    let feature_profile = profiles_dir.join("feature.json.gz");
 
     // Check if profiles exist
     if !baseline_profile.exists() {

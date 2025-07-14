@@ -1,6 +1,6 @@
 //! Results comparison and report generation.
 
-use crate::{cli::Args, git::sanitize_git_ref};
+use crate::cli::Args;
 use chrono::{DateTime, Utc};
 use csv::Reader;
 use eyre::{eyre, Result, WrapErr};
@@ -118,17 +118,16 @@ impl ComparisonGenerator {
 
     /// Get the output directory for a specific reference
     pub fn get_ref_output_dir(&self, ref_type: &str) -> PathBuf {
-        // Use the actual git reference name, sanitized for filesystem
-        let ref_name = match ref_type {
-            "baseline" => &self.baseline_ref_name,
-            "feature" => &self.feature_ref_name,
+        // Use simple "baseline" and "feature" directory names for cleaner organization
+        let dir_name = match ref_type {
+            "baseline" | "feature" => ref_type,
             _ => ref_type, // fallback to the provided string
         };
 
         self.output_dir
             .join("results")
             .join(&self.timestamp)
-            .join(sanitize_git_ref(ref_name))
+            .join(dir_name)
     }
 
     /// Get the main output directory for this comparison run

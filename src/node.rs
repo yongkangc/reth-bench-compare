@@ -1,6 +1,6 @@
 //! Node management for starting, stopping, and controlling reth instances.
 
-use crate::{cli::Args, git::sanitize_git_ref};
+use crate::cli::Args;
 use alloy_provider::{Provider, ProviderBuilder};
 use alloy_rpc_types_eth::SyncStatus;
 use eyre::{eyre, OptionExt, Result, WrapErr};
@@ -119,14 +119,14 @@ impl NodeManager {
     /// Create a command for profiling mode
     async fn create_profiling_command(
         &self,
-        git_ref: &str,
+        ref_type: &str,
         reth_args: &[String],
     ) -> Result<Command> {
         // Create profiles directory if it doesn't exist
         let profile_dir = self.output_dir.join("profiles");
         fs::create_dir_all(&profile_dir).wrap_err("Failed to create profiles directory")?;
 
-        let profile_path = profile_dir.join(format!("{}.json.gz", sanitize_git_ref(git_ref)));
+        let profile_path = profile_dir.join(format!("{}.json.gz", ref_type));
         info!("Starting reth node with samply profiling...");
         info!("Profile output: {:?}", profile_path);
 
@@ -182,7 +182,8 @@ impl NodeManager {
     pub async fn start_node(
         &mut self,
         binary_path: &std::path::Path,
-        git_ref: &str,
+        _git_ref: &str,
+        ref_type: &str,
         additional_args: &[String],
     ) -> Result<tokio::process::Child> {
         // Store the binary path for later use (e.g., in unwind_to_block)
@@ -206,7 +207,7 @@ impl NodeManager {
         }
 
         let mut cmd = if self.enable_profiling {
-            self.create_profiling_command(git_ref, &reth_args).await?
+            self.create_profiling_command(ref_type, &reth_args).await?
         } else {
             self.create_direct_command(&reth_args)
         };
