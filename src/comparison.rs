@@ -125,7 +125,10 @@ impl ComparisonGenerator {
             _ => ref_type, // fallback to the provided string
         };
 
-        self.output_dir.join("results").join(&self.timestamp).join(sanitize_git_ref(ref_name))
+        self.output_dir
+            .join("results")
+            .join(&self.timestamp)
+            .join(sanitize_git_ref(ref_name))
     }
 
     /// Get the main output directory for this comparison run
@@ -158,11 +161,15 @@ impl ComparisonGenerator {
     pub async fn generate_comparison_report(&self) -> Result<()> {
         info!("Generating comparison report...");
 
-        let baseline =
-            self.baseline_results.as_ref().ok_or_else(|| eyre!("Baseline results not loaded"))?;
+        let baseline = self
+            .baseline_results
+            .as_ref()
+            .ok_or_else(|| eyre!("Baseline results not loaded"))?;
 
-        let feature =
-            self.feature_results.as_ref().ok_or_else(|| eyre!("Feature results not loaded"))?;
+        let feature = self
+            .feature_results
+            .as_ref()
+            .ok_or_else(|| eyre!("Feature results not loaded"))?;
 
         // Generate comparison
         let comparison_summary =
@@ -206,7 +213,11 @@ impl ComparisonGenerator {
 
         let summary = self.calculate_summary(&combined_latency_data, &total_gas_data)?;
 
-        Ok(BenchmarkResults { ref_name: ref_name.to_string(), combined_latency_data, summary })
+        Ok(BenchmarkResults {
+            ref_name: ref_name.to_string(),
+            combined_latency_data,
+            summary,
+        })
     }
 
     /// Load combined latency CSV data
@@ -262,17 +273,23 @@ impl ComparisonGenerator {
 
         let total_duration_ms = total_gas_data.last().unwrap().time / 1000; // Convert microseconds to milliseconds
 
-        let avg_new_payload_latency_ms: f64 =
-            combined_data.iter().map(|r| r.new_payload_latency as f64 / 1000.0).sum::<f64>() /
-                total_blocks as f64;
+        let avg_new_payload_latency_ms: f64 = combined_data
+            .iter()
+            .map(|r| r.new_payload_latency as f64 / 1000.0)
+            .sum::<f64>()
+            / total_blocks as f64;
 
-        let avg_fcu_latency_ms: f64 =
-            combined_data.iter().map(|r| r.fcu_latency as f64 / 1000.0).sum::<f64>() /
-                total_blocks as f64;
+        let avg_fcu_latency_ms: f64 = combined_data
+            .iter()
+            .map(|r| r.fcu_latency as f64 / 1000.0)
+            .sum::<f64>()
+            / total_blocks as f64;
 
-        let avg_total_latency_ms: f64 =
-            combined_data.iter().map(|r| r.total_latency as f64 / 1000.0).sum::<f64>() /
-                total_blocks as f64;
+        let avg_total_latency_ms: f64 = combined_data
+            .iter()
+            .map(|r| r.total_latency as f64 / 1000.0)
+            .sum::<f64>()
+            / total_blocks as f64;
 
         let total_duration_seconds = total_duration_ms as f64 / 1000.0;
         let gas_per_second = if total_duration_seconds > 0.0 {
@@ -376,7 +393,10 @@ impl ComparisonGenerator {
                 };
                 comparisons.push(comparison);
             } else {
-                warn!("Block {} not found in baseline data", feature_row.block_number);
+                warn!(
+                    "Block {} not found in baseline data",
+                    feature_row.block_number
+                );
             }
         }
 
@@ -402,7 +422,9 @@ impl ComparisonGenerator {
             .wrap_err_with(|| format!("Failed to create CSV writer: {csv_path:?}"))?;
 
         for comparison in &report.per_block_comparisons {
-            writer.serialize(comparison).wrap_err("Failed to write comparison row to CSV")?;
+            writer
+                .serialize(comparison)
+                .wrap_err("Failed to write comparison row to CSV")?;
         }
         writer.flush().wrap_err("Failed to flush CSV writer")?;
 
@@ -432,11 +454,26 @@ impl ComparisonGenerator {
         let summary = &report.comparison_summary;
 
         println!("Performance Changes:");
-        println!("  NewPayload Latency: {:+.2}%", summary.new_payload_latency_change_percent);
-        println!("  FCU Latency:        {:+.2}%", summary.fcu_latency_change_percent);
-        println!("  Total Latency:      {:+.2}%", summary.total_latency_change_percent);
-        println!("  Gas/Second:         {:+.2}%", summary.gas_per_second_change_percent);
-        println!("  Blocks/Second:      {:+.2}%", summary.blocks_per_second_change_percent);
+        println!(
+            "  NewPayload Latency: {:+.2}%",
+            summary.new_payload_latency_change_percent
+        );
+        println!(
+            "  FCU Latency:        {:+.2}%",
+            summary.fcu_latency_change_percent
+        );
+        println!(
+            "  Total Latency:      {:+.2}%",
+            summary.total_latency_change_percent
+        );
+        println!(
+            "  Gas/Second:         {:+.2}%",
+            summary.gas_per_second_change_percent
+        );
+        println!(
+            "  Blocks/Second:      {:+.2}%",
+            summary.blocks_per_second_change_percent
+        );
         println!();
 
         println!("Baseline Summary:");

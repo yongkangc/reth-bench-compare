@@ -40,7 +40,11 @@ pub struct Args {
     pub blocks: u64,
 
     /// RPC endpoint for fetching block data
-    #[arg(long, value_name = "URL", default_value = "https://reth-ethereum.ithaca.xyz/rpc")]
+    #[arg(
+        long,
+        value_name = "URL",
+        default_value = "https://reth-ethereum.ithaca.xyz/rpc"
+    )]
     pub rpc_url: String,
 
     /// JWT secret file path
@@ -65,7 +69,12 @@ pub struct Args {
     /// The chain this node is running.
     ///
     /// Possible values are either a built-in chain name or numeric chain ID.
-    #[arg(long, value_name = "CHAIN", default_value = "mainnet", required = false)]
+    #[arg(
+        long,
+        value_name = "CHAIN",
+        default_value = "mainnet",
+        required = false
+    )]
     pub chain: Chain,
 
     /// Run reth binary with sudo (for elevated privileges)
@@ -134,14 +143,19 @@ impl Args {
 /// Validate that the RPC endpoint chain ID matches the specified chain
 async fn validate_rpc_chain_id(rpc_url: &str, expected_chain: &Chain) -> Result<()> {
     // Create Alloy provider
-    let url = rpc_url.parse().map_err(|e| eyre!("Invalid RPC URL '{}': {}", rpc_url, e))?;
+    let url = rpc_url
+        .parse()
+        .map_err(|e| eyre!("Invalid RPC URL '{}': {}", rpc_url, e))?;
     let provider = ProviderBuilder::new().connect_http(url);
 
     // Query chain ID using Alloy
-    let rpc_chain_id = provider
-        .get_chain_id()
-        .await
-        .map_err(|e| eyre!("Failed to get chain ID from RPC endpoint {}: {:?}", rpc_url, e))?;
+    let rpc_chain_id = provider.get_chain_id().await.map_err(|e| {
+        eyre!(
+            "Failed to get chain ID from RPC endpoint {}: {:?}",
+            rpc_url,
+            e
+        )
+    })?;
 
     let expected_chain_id = expected_chain.id();
 
@@ -318,7 +332,9 @@ async fn run_benchmark_workflow(
         let output_dir = comparison_generator.get_ref_output_dir(ref_type);
 
         // Run benchmark (comparison logic is handled separately by ComparisonGenerator)
-        benchmark_runner.run_benchmark(from_block, to_block, &output_dir).await?;
+        benchmark_runner
+            .run_benchmark(from_block, to_block, &output_dir)
+            .await?;
 
         // Stop node
         node_manager.stop_node(&mut node_process).await?;
@@ -392,7 +408,10 @@ async fn generate_comparison_charts(
     }
 
     let output = cmd.output().await.map_err(|e| {
-        eyre!("Failed to execute Python script with uv: {}. Make sure uv is installed.", e)
+        eyre!(
+            "Failed to execute Python script with uv: {}. Make sure uv is installed.",
+            e
+        )
     })?;
 
     if !output.status.success() {
@@ -442,16 +461,27 @@ async fn start_samply_servers(args: &Args) -> Result<()> {
 
     // Find two consecutive available ports starting from 3000
     let (baseline_port, feature_port) = find_consecutive_ports(3000)?;
-    info!("Found available ports: {} and {}", baseline_port, feature_port);
+    info!(
+        "Found available ports: {} and {}",
+        baseline_port, feature_port
+    );
 
     // Get samply path
     let samply_path = get_samply_path().await?;
 
     // Start baseline server
-    info!("Starting samply server for baseline '{}' on port {}", args.baseline_ref, baseline_port);
+    info!(
+        "Starting samply server for baseline '{}' on port {}",
+        args.baseline_ref, baseline_port
+    );
     let mut baseline_cmd = Command::new(&samply_path);
     baseline_cmd
-        .args(["load", "--port", &baseline_port.to_string(), &baseline_profile.to_string_lossy()])
+        .args([
+            "load",
+            "--port",
+            &baseline_port.to_string(),
+            &baseline_profile.to_string_lossy(),
+        ])
         .kill_on_drop(true);
 
     // Set process group for consistent signal handling
@@ -462,16 +492,21 @@ async fn start_samply_servers(args: &Args) -> Result<()> {
 
     // Conditionally pipe output based on log level
     if tracing::enabled!(tracing::Level::DEBUG) {
-        baseline_cmd.stdout(std::process::Stdio::piped()).stderr(std::process::Stdio::piped());
+        baseline_cmd
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped());
     } else {
-        baseline_cmd.stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null());
+        baseline_cmd
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null());
     }
 
     // Debug log the command
     debug!("Executing samply load command: {:?}", baseline_cmd);
 
-    let mut baseline_child =
-        baseline_cmd.spawn().wrap_err("Failed to start samply server for baseline")?;
+    let mut baseline_child = baseline_cmd
+        .spawn()
+        .wrap_err("Failed to start samply server for baseline")?;
 
     // Stream baseline samply output if debug logging is enabled
     if tracing::enabled!(tracing::Level::DEBUG) {
@@ -499,10 +534,18 @@ async fn start_samply_servers(args: &Args) -> Result<()> {
     }
 
     // Start feature server
-    info!("Starting samply server for feature '{}' on port {}", args.feature_ref, feature_port);
+    info!(
+        "Starting samply server for feature '{}' on port {}",
+        args.feature_ref, feature_port
+    );
     let mut feature_cmd = Command::new(&samply_path);
     feature_cmd
-        .args(["load", "--port", &feature_port.to_string(), &feature_profile.to_string_lossy()])
+        .args([
+            "load",
+            "--port",
+            &feature_port.to_string(),
+            &feature_profile.to_string_lossy(),
+        ])
         .kill_on_drop(true);
 
     // Set process group for consistent signal handling
@@ -513,16 +556,21 @@ async fn start_samply_servers(args: &Args) -> Result<()> {
 
     // Conditionally pipe output based on log level
     if tracing::enabled!(tracing::Level::DEBUG) {
-        feature_cmd.stdout(std::process::Stdio::piped()).stderr(std::process::Stdio::piped());
+        feature_cmd
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped());
     } else {
-        feature_cmd.stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null());
+        feature_cmd
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null());
     }
 
     // Debug log the command
     debug!("Executing samply load command: {:?}", feature_cmd);
 
-    let mut feature_child =
-        feature_cmd.spawn().wrap_err("Failed to start samply server for feature")?;
+    let mut feature_child = feature_cmd
+        .spawn()
+        .wrap_err("Failed to start samply server for feature")?;
 
     // Stream feature samply output if debug logging is enabled
     if tracing::enabled!(tracing::Level::DEBUG) {
@@ -554,8 +602,14 @@ async fn start_samply_servers(args: &Args) -> Result<()> {
 
     // Print access information
     println!("\n=== SAMPLY PROFILE SERVERS STARTED ===");
-    println!("Baseline '{}': http://127.0.0.1:{}", args.baseline_ref, baseline_port);
-    println!("Feature  '{}': http://127.0.0.1:{}", args.feature_ref, feature_port);
+    println!(
+        "Baseline '{}': http://127.0.0.1:{}",
+        args.baseline_ref, baseline_port
+    );
+    println!(
+        "Feature  '{}': http://127.0.0.1:{}",
+        args.feature_ref, feature_port
+    );
     println!("\nOpen the URLs in your browser to view the profiles.");
     println!("Press Ctrl+C to stop the servers and exit.");
     println!("=========================================\n");
@@ -599,7 +653,10 @@ fn find_consecutive_ports(start_port: u16) -> Result<(u16, u16)> {
             return Ok((port, port + 1));
         }
     }
-    Err(eyre!("Could not find two consecutive available ports starting from {}", start_port))
+    Err(eyre!(
+        "Could not find two consecutive available ports starting from {}",
+        start_port
+    ))
 }
 
 /// Check if a port is available by attempting to bind to it

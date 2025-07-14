@@ -16,12 +16,18 @@ pub struct CompilationManager {
 impl CompilationManager {
     /// Create a new CompilationManager
     pub fn new(repo_root: String, output_dir: PathBuf, git_manager: GitManager) -> Result<Self> {
-        Ok(Self { repo_root, output_dir, git_manager })
+        Ok(Self {
+            repo_root,
+            output_dir,
+            git_manager,
+        })
     }
 
     /// Get the path to the cached binary
     pub fn get_cached_binary_path(&self, git_ref: &str) -> PathBuf {
-        self.output_dir.join("bin").join(format!("reth_{}", sanitize_git_ref(git_ref)))
+        self.output_dir
+            .join("bin")
+            .join(format!("reth_{}", sanitize_git_ref(git_ref)))
     }
 
     /// Check if a cached binary's commit matches the current git commit
@@ -64,7 +70,11 @@ impl CompilationManager {
             let current_commit = self.git_manager.get_current_commit()?;
 
             if cached_commit == current_commit {
-                info!("Using cached binary for {} (commit: {})", git_ref, &cached_commit[..8]);
+                info!(
+                    "Using cached binary for {} (commit: {})",
+                    git_ref,
+                    &cached_commit[..8]
+                );
                 return Ok(());
             } else {
                 info!(
@@ -79,7 +89,10 @@ impl CompilationManager {
             info!("No valid cached binary found for {}, compiling...", git_ref);
         }
 
-        info!("Compiling reth with profiling configuration for {}...", git_ref);
+        info!(
+            "Compiling reth with profiling configuration for {}...",
+            git_ref
+        );
 
         let mut cmd = Command::new("make");
         cmd.arg("profiling").current_dir(&self.repo_root);
@@ -87,7 +100,9 @@ impl CompilationManager {
         // Debug log the command
         debug!("Executing make command: {:?}", cmd);
 
-        let output = cmd.output().wrap_err("Failed to execute make profiling command")?;
+        let output = cmd
+            .output()
+            .wrap_err("Failed to execute make profiling command")?;
 
         // Print stdout and stderr with prefixes at debug level
         let stdout = String::from_utf8_lossy(&output.stdout);
@@ -107,7 +122,10 @@ impl CompilationManager {
 
         if !output.status.success() {
             // Print all output when compilation fails
-            error!("Make profiling failed with exit code: {:?}", output.status.code());
+            error!(
+                "Make profiling failed with exit code: {:?}",
+                output.status.code()
+            );
 
             if !stdout.trim().is_empty() {
                 error!("Make stdout:");
@@ -123,7 +141,10 @@ impl CompilationManager {
                 }
             }
 
-            return Err(eyre!("Compilation failed with exit code: {:?}", output.status.code()));
+            return Err(eyre!(
+                "Compilation failed with exit code: {:?}",
+                output.status.code()
+            ));
         }
 
         info!("Reth compilation completed");
@@ -196,7 +217,9 @@ impl CompilationManager {
         // Debug log the command
         debug!("Executing cargo command: {:?}", cmd);
 
-        let output = cmd.output().wrap_err("Failed to execute cargo install samply command")?;
+        let output = cmd
+            .output()
+            .wrap_err("Failed to execute cargo install samply command")?;
 
         // Print stdout and stderr with prefixes at debug level
         let stdout = String::from_utf8_lossy(&output.stdout);
@@ -216,7 +239,10 @@ impl CompilationManager {
 
         if !output.status.success() {
             // Print all output when installation fails
-            error!("Cargo install samply failed with exit code: {:?}", output.status.code());
+            error!(
+                "Cargo install samply failed with exit code: {:?}",
+                output.status.code()
+            );
 
             if !stdout.trim().is_empty() {
                 error!("Cargo stdout:");
@@ -272,7 +298,9 @@ impl CompilationManager {
         // Debug log the command
         debug!("Executing make command: {:?}", cmd);
 
-        let output = cmd.output().wrap_err("Failed to execute make install-reth-bench command")?;
+        let output = cmd
+            .output()
+            .wrap_err("Failed to execute make install-reth-bench command")?;
 
         // Print stdout and stderr with prefixes at debug level
         let stdout = String::from_utf8_lossy(&output.stdout);
@@ -292,7 +320,10 @@ impl CompilationManager {
 
         if !output.status.success() {
             // Print all output when compilation fails
-            error!("Make install-reth-bench failed with exit code: {:?}", output.status.code());
+            error!(
+                "Make install-reth-bench failed with exit code: {:?}",
+                output.status.code()
+            );
 
             if !stdout.trim().is_empty() {
                 error!("Make stdout:");

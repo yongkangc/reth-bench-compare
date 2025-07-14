@@ -116,7 +116,10 @@ impl BenchmarkRunner {
             });
         }
 
-        let status = child.wait().await.wrap_err("Failed to wait for reth-bench")?;
+        let status = child
+            .wait()
+            .await
+            .wrap_err("Failed to wait for reth-bench")?;
 
         if !status.success() {
             // Print all captured output when command fails
@@ -140,7 +143,10 @@ impl BenchmarkRunner {
                 }
             }
 
-            return Err(eyre!("reth-bench failed with exit code: {:?}", status.code()));
+            return Err(eyre!(
+                "reth-bench failed with exit code: {:?}",
+                status.code()
+            ));
         }
 
         info!("Benchmark completed");

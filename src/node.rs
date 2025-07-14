@@ -139,7 +139,12 @@ impl NodeManager {
         };
 
         // Add samply arguments
-        cmd.args(["record", "--save-only", "-o", &profile_path.to_string_lossy()]);
+        cmd.args([
+            "record",
+            "--save-only",
+            "-o",
+            &profile_path.to_string_lossy(),
+        ]);
 
         // Add rate argument if available
         if let Some(rate) = self.get_perf_sample_rate() {
@@ -184,7 +189,10 @@ impl NodeManager {
 
         // Log additional arguments if any
         if !self.additional_reth_args.is_empty() {
-            info!("Using additional reth arguments: {:?}", self.additional_reth_args);
+            info!(
+                "Using additional reth arguments: {:?}",
+                self.additional_reth_args
+            );
         }
 
         let mut cmd = if self.enable_profiling {
@@ -250,7 +258,9 @@ impl NodeManager {
         let rpc_url = "http://localhost:8545";
 
         // Create Alloy provider
-        let url = rpc_url.parse().map_err(|e| eyre!("Invalid RPC URL '{}': {}", rpc_url, e))?;
+        let url = rpc_url
+            .parse()
+            .map_err(|e| eyre!("Invalid RPC URL '{}': {}", rpc_url, e))?;
         let provider = ProviderBuilder::new().connect_http(url);
 
         let result = timeout(max_wait, async {
@@ -258,26 +268,34 @@ impl NodeManager {
                 // First check if RPC is up and node is not syncing
                 match provider.syncing().await {
                     Ok(sync_result) => {
-                        // SyncStatus::None means not syncing, anything else means syncing
-                        let is_syncing = !matches!(sync_result, SyncStatus::None);
-
-                        if is_syncing {
-                            debug!("Node is still syncing, waiting...");
-                        } else {
-                            // Node is not syncing, now get the tip
-                            match provider.get_block_number().await {
-                                Ok(tip) => {
-                                    info!("Node is ready and not syncing at block: {}", tip);
-                                    return Ok(tip);
-                                }
-                                Err(e) => {
-                                    debug!("Failed to get block number: {}", e);
+                        match sync_result {
+                            SyncStatus::Info(sync_info)
+                                if sync_info.current_block != sync_info.highest_block
+                                    || sync_info.stages.as_ref().is_none_or(|stages| {
+                                        stages.windows(2).all(|w| w[0].block == w[1].block)
+                                    }) =>
+                            {
+                                debug!("Node is still syncing {sync_info:?}, waiting...");
+                            }
+                            _ => {
+                                // Node is not syncing, now get the tip
+                                match provider.get_block_number().await {
+                                    Ok(tip) => {
+                                        info!("Node is ready and not syncing at block: {}", tip);
+                                        return Ok(tip);
+                                    }
+                                    Err(e) => {
+                                        debug!("Failed to get block number: {}", e);
+                                    }
                                 }
                             }
                         }
                     }
                     Err(e) => {
-                        debug!("Node RPC not ready yet or failed to check sync status: {}", e);
+                        debug!(
+                            "Node RPC not ready yet or failed to check sync status: {}",
+                            e
+                        );
                     }
                 }
 
@@ -297,12 +315,18 @@ impl NodeManager {
         // Check if the process has already exited
         match child.try_wait() {
             Ok(Some(status)) => {
-                info!("Reth node (PID: {}) has already exited with status: {:?}", pid, status);
+                info!(
+                    "Reth node (PID: {}) has already exited with status: {:?}",
+                    pid, status
+                );
                 return Ok(());
             }
             Ok(None) => {
                 // Process is still running, proceed to stop it
-                info!("Stopping reth node gracefully with SIGINT (PID: {})...", pid);
+                info!(
+                    "Stopping reth node gracefully with SIGINT (PID: {})...",
+                    pid
+                );
             }
             Err(e) => {
                 return Err(eyre!("Failed to check process status: {}", e));
@@ -324,7 +348,11 @@ impl NodeManager {
                     info!("Process group {} has already exited", pid);
                 }
                 Err(e) => {
-                    return Err(eyre!("Failed to send SIGINT to process group {}: {}", pid, e));
+                    return Err(eyre!(
+                        "Failed to send SIGINT to process group {}: {}",
+                        pid,
+                        e
+                    ));
                 }
             }
         }
@@ -356,7 +384,10 @@ impl NodeManager {
             }
             Err(e) => {
                 // If we get an error here, it might be because the process already exited
-                debug!("Error waiting for process exit (may have already exited): {}", e);
+                debug!(
+                    "Error waiting for process exit (may have already exited): {}",
+                    e
+                );
             }
         }
 
@@ -404,7 +435,10 @@ impl NodeManager {
         // Debug log the command
         debug!("Executing reth unwind command: {:?}", cmd);
 
-        let output = cmd.output().await.wrap_err("Failed to execute unwind command")?;
+        let output = cmd
+            .output()
+            .await
+            .wrap_err("Failed to execute unwind command")?;
 
         // Print stdout and stderr with prefixes at debug level
         let stdout = String::from_utf8_lossy(&output.stdout);
@@ -424,7 +458,10 @@ impl NodeManager {
 
         if !output.status.success() {
             // Print all output when unwind fails
-            error!("Reth unwind failed with exit code: {:?}", output.status.code());
+            error!(
+                "Reth unwind failed with exit code: {:?}",
+                output.status.code()
+            );
 
             if !stdout.trim().is_empty() {
                 error!("Reth unwind stdout:");
@@ -440,7 +477,10 @@ impl NodeManager {
                 }
             }
 
-            return Err(eyre!("Unwind command failed with exit code: {:?}", output.status.code()));
+            return Err(eyre!(
+                "Unwind command failed with exit code: {:?}",
+                output.status.code()
+            ));
         }
 
         info!("Unwound to block: {}", block_number);

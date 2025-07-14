@@ -143,8 +143,10 @@ impl GitManager {
         }
 
         // Check if there are untracked files and log them as info
-        let untracked_files: Vec<&str> =
-            status_output.lines().filter(|line| line.starts_with("??")).collect();
+        let untracked_files: Vec<&str> = status_output
+            .lines()
+            .filter(|line| line.starts_with("??"))
+            .collect();
 
         if !untracked_files.is_empty() {
             info!(
@@ -169,7 +171,10 @@ impl GitManager {
             let stderr = String::from_utf8_lossy(&output.stderr);
             // Only warn if there's actual error content, not just fetch progress
             if !stderr.trim().is_empty() && !stderr.contains("-> origin/") {
-                warn!("Git fetch encountered issues (continuing anyway): {}", stderr);
+                warn!(
+                    "Git fetch encountered issues (continuing anyway): {}",
+                    stderr
+                );
             }
         } else {
             info!("Fetched latest refs");
@@ -246,12 +251,21 @@ impl GitManager {
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(eyre!("Failed to switch to reference '{}': {}", git_ref, stderr));
+            return Err(eyre!(
+                "Failed to switch to reference '{}': {}",
+                git_ref,
+                stderr
+            ));
         }
 
         // Check if this is a branch that tracks a remote and pull latest changes
         let is_branch = Command::new("git")
-            .args(["show-ref", "--verify", "--quiet", &format!("refs/heads/{}", git_ref)])
+            .args([
+                "show-ref",
+                "--verify",
+                "--quiet",
+                &format!("refs/heads/{git_ref}"),
+            ])
             .current_dir(&self.repo_root)
             .status()
             .map(|s| s.success())
@@ -264,7 +278,7 @@ impl GitManager {
                     "rev-parse",
                     "--abbrev-ref",
                     "--symbolic-full-name",
-                    &format!("{}@{{upstream}}", git_ref),
+                    &format!("{git_ref}@{{upstream}}"),
                 ])
                 .current_dir(&self.repo_root)
                 .output();
@@ -272,7 +286,7 @@ impl GitManager {
             if let Ok(output) = tracking_output {
                 if output.status.success() {
                     let upstream = String::from_utf8_lossy(&output.stdout).trim().to_string();
-                    if !upstream.is_empty() && upstream != format!("{}@{{upstream}}", git_ref) {
+                    if !upstream.is_empty() && upstream != format!("{git_ref}@{{upstream}}") {
                         // Branch tracks a remote, pull latest changes
                         info!("Pulling latest changes for branch: {}", git_ref);
 
@@ -281,7 +295,7 @@ impl GitManager {
                             .current_dir(&self.repo_root)
                             .output()
                             .wrap_err_with(|| {
-                                format!("Failed to pull latest changes for branch '{}'", git_ref)
+                                format!("Failed to pull latest changes for branch '{git_ref}'")
                             })?;
 
                         if !pull_output.status.success() {
@@ -355,10 +369,13 @@ mod tests {
         let git_manager = GitManager::new();
         if let Ok(manager) = git_manager {
             let current_ref = manager.get_current_ref();
-            assert!(current_ref.is_ok(), "Should be able to get current git reference");
+            assert!(
+                current_ref.is_ok(),
+                "Should be able to get current git reference"
+            );
             let ref_str = current_ref.unwrap();
             assert!(!ref_str.is_empty(), "Git reference should not be empty");
-            println!("Current git reference: {}", ref_str);
+            println!("Current git reference: {ref_str}");
         }
     }
 
