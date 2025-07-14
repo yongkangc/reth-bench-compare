@@ -435,51 +435,42 @@ impl NodeManager {
         // Debug log the command
         debug!("Executing reth unwind command: {:?}", cmd);
 
-        let output = cmd
-            .output()
+        let mut child = cmd
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()
+            .wrap_err("Failed to start unwind command")?;
+
+        // Stream stdout and stderr with prefixes in real-time
+        if let Some(stdout) = child.stdout.take() {
+            tokio::spawn(async move {
+                let reader = AsyncBufReader::new(stdout);
+                let mut lines = reader.lines();
+                while let Ok(Some(line)) = lines.next_line().await {
+                    info!("[RETH-UNWIND] {}", line);
+                }
+            });
+        }
+
+        if let Some(stderr) = child.stderr.take() {
+            tokio::spawn(async move {
+                let reader = AsyncBufReader::new(stderr);
+                let mut lines = reader.lines();
+                while let Ok(Some(line)) = lines.next_line().await {
+                    info!("[RETH-UNWIND] {}", line);
+                }
+            });
+        }
+
+        // Wait for the command to complete
+        let status = child.wait()
             .await
-            .wrap_err("Failed to execute unwind command")?;
+            .wrap_err("Failed to wait for unwind command")?;
 
-        // Print stdout and stderr with prefixes at debug level
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        let stderr = String::from_utf8_lossy(&output.stderr);
-
-        for line in stdout.lines() {
-            if !line.trim().is_empty() {
-                debug!("[RETH-UNWIND] {}", line);
-            }
-        }
-
-        for line in stderr.lines() {
-            if !line.trim().is_empty() {
-                debug!("[RETH-UNWIND] {}", line);
-            }
-        }
-
-        if !output.status.success() {
-            // Print all output when unwind fails
-            error!(
-                "Reth unwind failed with exit code: {:?}",
-                output.status.code()
-            );
-
-            if !stdout.trim().is_empty() {
-                error!("Reth unwind stdout:");
-                for line in stdout.lines() {
-                    error!("  {}", line);
-                }
-            }
-
-            if !stderr.trim().is_empty() {
-                error!("Reth unwind stderr:");
-                for line in stderr.lines() {
-                    error!("  {}", line);
-                }
-            }
-
+        if !status.success() {
             return Err(eyre!(
                 "Unwind command failed with exit code: {:?}",
-                output.status.code()
+                status.code()
             ));
         }
 
