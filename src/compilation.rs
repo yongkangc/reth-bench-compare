@@ -1,6 +1,8 @@
 //! Compilation operations for reth and reth-bench.
 
 use crate::git::{sanitize_git_ref, GitManager};
+use alloy_primitives::address;
+use alloy_provider::{Provider, ProviderBuilder};
 use eyre::{eyre, Result, WrapErr};
 use std::{fs, path::PathBuf, process::Command};
 use tracing::{debug, error, info, warn};
@@ -23,11 +25,40 @@ impl CompilationManager {
         })
     }
 
+    /// Detect if the RPC endpoint is an Optimism chain
+    pub async fn detect_optimism_chain(&self, rpc_url: &str) -> Result<bool> {
+        info!("Detecting chain type from RPC endpoint...");
+        
+        // Create Alloy provider
+        let url = rpc_url
+            .parse()
+            .map_err(|e| eyre!("Invalid RPC URL '{}': {}", rpc_url, e))?;
+        let provider = ProviderBuilder::new().connect_http(url);
+
+        // Check for Optimism predeploy at address 0x420000000000000000000000000000000000000F
+        let is_optimism = !provider
+            .get_code_at(address!("0x420000000000000000000000000000000000000F"))
+            .await?
+            .is_empty();
+
+        if is_optimism {
+            info!("Detected Optimism chain");
+        } else {
+            info!("Detected Ethereum chain");
+        }
+
+        Ok(is_optimism)
+    }
+
     /// Get the path to the cached binary
-    pub fn get_cached_binary_path(&self, git_ref: &str) -> PathBuf {
-        self.output_dir
-            .join("bin")
-            .join(format!("reth_{}", sanitize_git_ref(git_ref)))
+    pub fn get_cached_binary_path(&self, git_ref: &str, is_optimism: bool) -> PathBuf {
+        let binary_name = if is_optimism {
+            format!("op-reth_{}", sanitize_git_ref(git_ref))
+        } else {
+            format!("reth_{}", sanitize_git_ref(git_ref))
+        };
+        
+        self.output_dir.join("bin").join(binary_name)
     }
 
     /// Check if a cached binary's commit matches the current git commit
@@ -62,8 +93,8 @@ impl CompilationManager {
     }
 
     /// Compile reth using `make profiling` and cache the binary
-    pub fn compile_reth(&self, git_ref: &str) -> Result<()> {
-        let cached_path = self.get_cached_binary_path(git_ref);
+    pub fn compile_reth(&self, git_ref: &str, is_optimism: bool) -> Result<()> {
+        let cached_path = self.get_cached_binary_path(git_ref, is_optimism);
 
         // Check if we have a cached binary with matching commit
         if let Some(cached_commit) = self.check_cached_binary_commit(&cached_path)? {
@@ -89,13 +120,19 @@ impl CompilationManager {
             info!("No valid cached binary found for {}, compiling...", git_ref);
         }
 
+        let (make_target, binary_name) = if is_optimism {
+            ("profiling-op", "op-reth")
+        } else {
+            ("profiling", "reth")
+        };
+
         info!(
-            "Compiling reth with profiling configuration for {}...",
-            git_ref
+            "Compiling {} with profiling configuration for {}...",
+            binary_name, git_ref
         );
 
         let mut cmd = Command::new("make");
-        cmd.arg("profiling").current_dir(&self.repo_root);
+        cmd.arg(make_target).current_dir(&self.repo_root);
 
         // Debug log the command
         debug!("Executing make command: {:?}", cmd);
@@ -147,10 +184,10 @@ impl CompilationManager {
             ));
         }
 
-        info!("Reth compilation completed");
+        info!("{} compilation completed", binary_name);
 
         // Copy the compiled binary to cache
-        let source_path = PathBuf::from(&self.repo_root).join("target/profiling/reth");
+        let source_path = PathBuf::from(&self.repo_root).join(format!("target/profiling/{}", binary_name));
         if !source_path.exists() {
             return Err(eyre!("Compiled binary not found at {:?}", source_path));
         }

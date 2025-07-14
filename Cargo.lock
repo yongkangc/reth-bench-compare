@@ -4564,6 +4564,7 @@ checksum = "95325155c684b1c89f7765e30bc1c42e4a6da51ca513615660cb8a62ef9a88e3"
 name = "reth-bench-compare"
 version = "1.5.0"
 dependencies = [
+ "alloy-primitives",
  "alloy-provider",
  "alloy-rpc-types-eth",
  "chrono",

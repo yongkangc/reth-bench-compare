@@ -308,6 +308,9 @@ async fn run_benchmark_workflow(
     comparison_generator: &mut ComparisonGenerator,
     args: &Args,
 ) -> Result<()> {
+    // Detect if this is an Optimism chain once at the beginning
+    let is_optimism = compilation_manager.detect_optimism_chain(&args.rpc_url).await?;
+    
     let refs = [&args.baseline_ref, &args.feature_ref];
     let ref_types = ["baseline", "feature"];
 
@@ -319,7 +322,7 @@ async fn run_benchmark_workflow(
         git_manager.switch_ref(git_ref)?;
 
         // Compile reth (with caching) and ensure reth-bench is available
-        compilation_manager.compile_reth(git_ref)?;
+        compilation_manager.compile_reth(git_ref, is_optimism)?;
 
         // Always ensure reth-bench is available (compile if not found)
         compilation_manager.ensure_reth_bench_available()?;
@@ -330,7 +333,7 @@ async fn run_benchmark_workflow(
         }
 
         // Get the binary path for this git reference
-        let binary_path = compilation_manager.get_cached_binary_path(git_ref);
+        let binary_path = compilation_manager.get_cached_binary_path(git_ref, is_optimism);
 
         // Get reference-specific additional arguments
         let additional_args = match ref_type {
