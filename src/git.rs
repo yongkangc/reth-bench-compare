@@ -29,9 +29,9 @@ impl GitManager {
 
         let manager = Self { repo_root };
         info!(
-            "Detected git repository at: {}, current branch: {}",
+            "Detected git repository at: {}, current reference: {}",
             manager.repo_root(),
-            manager.get_current_branch()?
+            manager.get_current_ref()?
         );
 
         Ok(manager)

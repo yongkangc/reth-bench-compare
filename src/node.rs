@@ -15,7 +15,7 @@ use tokio::{
     process::Command,
     time::{sleep, timeout},
 };
-use tracing::{debug, error, info};
+use tracing::{debug, info};
 
 /// Manages reth node lifecycle and operations
 pub struct NodeManager {
