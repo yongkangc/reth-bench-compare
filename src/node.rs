@@ -189,8 +189,8 @@ impl NodeManager {
 
     /// Clear system caches to ensure clean benchmark conditions
     async fn clear_caches(&self) -> Result<()> {
-        if cfg!(target_os = "macos") {
-            info!("Skipping cache clearing on macOS");
+        if !cfg!(target_os = "linux") {
+            info!("Skipping cache clearing on non-Linux platform");
             return Ok(());
         }
         
