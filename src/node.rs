@@ -506,7 +506,7 @@ impl NodeManager {
                 let reader = AsyncBufReader::new(stdout);
                 let mut lines = reader.lines();
                 while let Ok(Some(line)) = lines.next_line().await {
-                    info!("[RETH-UNWIND] {}", line);
+                    debug!("[RETH-UNWIND] {}", line);
                 }
             });
         }
@@ -516,7 +516,7 @@ impl NodeManager {
                 let reader = AsyncBufReader::new(stderr);
                 let mut lines = reader.lines();
                 while let Ok(Some(line)) = lines.next_line().await {
-                    info!("[RETH-UNWIND] {}", line);
+                    debug!("[RETH-UNWIND] {}", line);
                 }
             });
         }
