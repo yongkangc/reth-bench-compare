@@ -47,7 +47,7 @@ reth-cli-util = { git = "https://github.com/paradigmxyz/reth.git", rev = "dddde9
 reth-chainspec = { git = "https://github.com/paradigmxyz/reth.git", rev = "dddde9eff9" }
 
 # Alloy for RPC communication
-alloy-provider = { version = "1.0.17", features = ["reqwest", "reqwest-rustls-tls"] }
+alloy-provider = { version = "1.0.17", default-features = false, features = ["reqwest", "reqwest-rustls-tls"] }
 alloy-rpc-types-eth = "1.0.17"
 alloy-primitives = "1.0.17"
 
