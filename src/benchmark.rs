@@ -23,7 +23,7 @@ impl BenchmarkRunner {
     /// Create a new BenchmarkRunner from CLI arguments
     pub fn new(args: &Args) -> Self {
         Self {
-            rpc_url: args.rpc_url.clone(),
+            rpc_url: args.get_rpc_url(),
             jwt_secret: args.jwt_secret_path().to_string_lossy().to_string(),
             wait_time: args.wait_time.clone(),
         }
@@ -189,5 +189,66 @@ mod tests {
 
         let runner = BenchmarkRunner::new(&args);
         assert_eq!(runner.wait_time, None);
+    }
+
+    #[test]
+    fn test_default_rpc_urls() {
+        // Test mainnet default
+        let args = Args::try_parse_from([
+            "reth-bench-compare",
+            "--baseline-ref",
+            "main",
+            "--feature-ref",
+            "test",
+            "--chain",
+            "mainnet",
+        ])
+        .unwrap();
+        let runner = BenchmarkRunner::new(&args);
+        assert_eq!(runner.rpc_url, "https://reth-ethereum.ithaca.xyz/rpc");
+
+        // Test base default
+        let args = Args::try_parse_from([
+            "reth-bench-compare",
+            "--baseline-ref",
+            "main",
+            "--feature-ref",
+            "test",
+            "--chain",
+            "base",
+        ])
+        .unwrap();
+        let runner = BenchmarkRunner::new(&args);
+        assert_eq!(runner.rpc_url, "https://base-mainnet.rpc.ithaca.xyz");
+
+        // Test base-sepolia default
+        let args = Args::try_parse_from([
+            "reth-bench-compare",
+            "--baseline-ref",
+            "main",
+            "--feature-ref",
+            "test",
+            "--chain",
+            "base-sepolia",
+        ])
+        .unwrap();
+        let runner = BenchmarkRunner::new(&args);
+        assert_eq!(runner.rpc_url, "https://base-sepolia.rpc.ithaca.xyz");
+
+        // Test custom RPC URL overrides default
+        let args = Args::try_parse_from([
+            "reth-bench-compare",
+            "--baseline-ref",
+            "main",
+            "--feature-ref",
+            "test",
+            "--chain",
+            "base",
+            "--rpc-url",
+            "https://custom-rpc.example.com",
+        ])
+        .unwrap();
+        let runner = BenchmarkRunner::new(&args);
+        assert_eq!(runner.rpc_url, "https://custom-rpc.example.com");
     }
 }
