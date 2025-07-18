@@ -89,6 +89,11 @@ pub struct Args {
     #[arg(long, value_name = "DURATION")]
     pub wait_time: Option<String>,
 
+    /// Number of blocks to run for cache warmup after clearing caches.
+    /// If not specified, defaults to the same as --blocks
+    #[arg(long, value_name = "N")]
+    pub warmup_blocks: Option<u64>,
+
     #[command(flatten)]
     pub logs: LogArgs,
 
@@ -163,6 +168,11 @@ impl Args {
     pub fn output_dir_path(&self) -> PathBuf {
         let expanded = shellexpand::tilde(&self.output_dir);
         PathBuf::from(expanded.as_ref())
+    }
+
+    /// Get the effective warmup blocks value - either specified or defaults to blocks
+    pub fn get_warmup_blocks(&self) -> u64 {
+        self.warmup_blocks.unwrap_or(self.blocks)
     }
 }
 
@@ -314,6 +324,121 @@ fn parse_args_string(args_str: &str) -> Vec<String> {
     })
 }
 
+/// Run compilation phase for both baseline and feature binaries
+async fn run_compilation_phase(
+    git_manager: &GitManager,
+    compilation_manager: &CompilationManager,
+    args: &Args,
+    is_optimism: bool,
+) -> Result<(String, String)> {
+    info!("=== Running compilation phase ===");
+    
+    // Ensure required tools are available (only need to check once)
+    compilation_manager.ensure_reth_bench_available()?;
+    if args.profile {
+        compilation_manager.ensure_samply_available()?;
+    }
+    
+    let refs = [&args.baseline_ref, &args.feature_ref];
+    let ref_types = ["baseline", "feature"];
+    
+    // First, resolve all refs to commits using a HashMap to avoid race conditions where a ref is
+    // pushed to mid-run.
+    let mut ref_commits = std::collections::HashMap::new();
+    for &git_ref in refs.iter() {
+        if !ref_commits.contains_key(git_ref) {
+            git_manager.switch_ref(git_ref)?;
+            let commit = git_manager.get_current_commit()?;
+            ref_commits.insert(git_ref.to_string(), commit);
+            info!("Reference {} resolves to commit: {}", git_ref, &ref_commits[git_ref][..8]);
+        }
+    }
+    
+    // Now compile each ref using the resolved commits
+    for (i, &git_ref) in refs.iter().enumerate() {
+        let ref_type = ref_types[i];
+        let commit = &ref_commits[git_ref];
+        
+        info!("Compiling {} binary for reference: {} (commit: {})", ref_type, git_ref, &commit[..8]);
+        
+        // Switch to target reference
+        git_manager.switch_ref(git_ref)?;
+        
+        // Compile reth (with caching)
+        compilation_manager.compile_reth(commit, is_optimism)?;
+        
+        info!("Completed compilation for {} reference", ref_type);
+    }
+    
+    let baseline_commit = ref_commits[&args.baseline_ref].clone();
+    let feature_commit = ref_commits[&args.feature_ref].clone();
+    
+    info!("Compilation phase completed");
+    Ok((baseline_commit, feature_commit))
+}
+
+/// Run warmup phase to warm up caches before benchmarking
+async fn run_warmup_phase(
+    git_manager: &GitManager,
+    compilation_manager: &CompilationManager,
+    node_manager: &mut NodeManager,
+    benchmark_runner: &BenchmarkRunner,
+    args: &Args,
+    is_optimism: bool,
+    baseline_commit: &str,
+) -> Result<()> {
+    info!("=== Running warmup phase ===");
+    
+    // Use baseline for warmup
+    let warmup_ref = &args.baseline_ref;
+    
+    // Switch to baseline reference
+    git_manager.switch_ref(warmup_ref)?;
+    
+    // Get the cached binary path for baseline (should already be compiled)
+    let binary_path = compilation_manager.get_cached_binary_path_for_commit(baseline_commit, is_optimism);
+    
+    // Verify the cached binary exists
+    if !binary_path.exists() {
+        return Err(eyre!(
+            "Cached baseline binary not found at {:?}. Compilation phase should have created it.",
+            binary_path
+        ));
+    }
+    
+    info!("Using cached baseline binary for warmup (commit: {})", &baseline_commit[..8]);
+    
+    // Get baseline additional arguments for warmup
+    let additional_args = args.baseline_args.as_ref().map(|s| parse_args_string(s)).unwrap_or_default();
+    
+    // Start reth node for warmup
+    let mut node_process = node_manager.start_node(&binary_path, warmup_ref, "warmup", &additional_args).await?;
+    
+    // Wait for node to be ready and get its current tip
+    let current_tip = node_manager.wait_for_node_ready_and_get_tip().await?;
+    info!("Warmup node is ready at tip: {}", current_tip);
+    
+    // Store the tip we'll unwind back to
+    let original_tip = current_tip;
+    
+    // Clear filesystem caches before warmup run only
+    BenchmarkRunner::clear_fs_caches().await?;
+    
+    // Run warmup to warm up caches
+    benchmark_runner
+        .run_warmup(current_tip)
+        .await?;
+    
+    // Stop node before unwinding (node must be stopped to release database lock)
+    node_manager.stop_node(&mut node_process).await?;
+    
+    // Unwind back to starting block after warmup
+    node_manager.unwind_to_block(original_tip).await?;
+    
+    info!("Warmup phase completed");
+    Ok(())
+}
+
 /// Execute the complete benchmark workflow for both branches
 async fn run_benchmark_workflow(
     git_manager: &GitManager,
@@ -327,29 +452,36 @@ async fn run_benchmark_workflow(
     let rpc_url = args.get_rpc_url();
     let is_optimism = compilation_manager.detect_optimism_chain(&rpc_url).await?;
     
+    // Run compilation phase for both binaries
+    let (baseline_commit, feature_commit) = run_compilation_phase(git_manager, compilation_manager, args, is_optimism).await?;
+    
+    // Run warmup phase before benchmarking
+    run_warmup_phase(git_manager, compilation_manager, node_manager, benchmark_runner, args, is_optimism, &baseline_commit).await?;
+    
     let refs = [&args.baseline_ref, &args.feature_ref];
     let ref_types = ["baseline", "feature"];
+    let commits = [&baseline_commit, &feature_commit];
 
     for (i, &git_ref) in refs.iter().enumerate() {
         let ref_type = ref_types[i];
+        let commit = commits[i];
         info!("=== Processing {} reference: {} ===", ref_type, git_ref);
 
         // Switch to target reference
         git_manager.switch_ref(git_ref)?;
 
-        // Compile reth (with caching) and ensure reth-bench is available
-        compilation_manager.compile_reth(git_ref, is_optimism)?;
-
-        // Always ensure reth-bench is available (compile if not found)
-        compilation_manager.ensure_reth_bench_available()?;
-
-        // Ensure samply is available if profiling is enabled
-        if args.profile {
-            compilation_manager.ensure_samply_available()?;
+        // Get the cached binary path for this git reference (should already be compiled)
+        let binary_path = compilation_manager.get_cached_binary_path_for_commit(commit, is_optimism);
+        
+        // Verify the cached binary exists
+        if !binary_path.exists() {
+            return Err(eyre!(
+                "Cached {} binary not found at {:?}. Compilation phase should have created it.",
+                ref_type, binary_path
+            ));
         }
-
-        // Get the binary path for this git reference
-        let binary_path = compilation_manager.get_cached_binary_path(git_ref, is_optimism);
+        
+        info!("Using cached {} binary (commit: {})", ref_type, &commit[..8]);
 
         // Get reference-specific additional arguments
         let additional_args = match ref_type {
@@ -371,16 +503,22 @@ async fn run_benchmark_workflow(
         // Calculate benchmark range
         // Note: reth-bench has an off-by-one error where it consumes the first block
         // of the range, so we add 1 to compensate and get exactly args.blocks blocks
-        let from_block = current_tip;
-        let to_block = current_tip + args.blocks;
+        let from_block = original_tip;
+        let to_block = original_tip + args.blocks;
 
         // Run benchmark
         let output_dir = comparison_generator.get_ref_output_dir(ref_type);
+
+        // Capture start timestamp for the benchmark run
+        let benchmark_start = chrono::Utc::now();
 
         // Run benchmark (comparison logic is handled separately by ComparisonGenerator)
         benchmark_runner
             .run_benchmark(from_block, to_block, &output_dir)
             .await?;
+
+        // Capture end timestamp for the benchmark run
+        let benchmark_end = chrono::Utc::now();
 
         // Stop node
         node_manager.stop_node(&mut node_process).await?;
@@ -390,6 +528,9 @@ async fn run_benchmark_workflow(
 
         // Store results for comparison
         comparison_generator.add_ref_results(ref_type, &output_dir)?;
+
+        // Set the benchmark run timestamps
+        comparison_generator.set_ref_timestamps(ref_type, benchmark_start, benchmark_end)?;
 
         info!("Completed {} reference benchmark", ref_type);
     }
