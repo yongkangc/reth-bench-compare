@@ -20,6 +20,7 @@ pub struct ComparisonGenerator {
     feature_ref_name: String,
     baseline_results: Option<BenchmarkResults>,
     feature_results: Option<BenchmarkResults>,
+    expected_blocks: u64,
 }
 
 /// Represents the results from a single benchmark run
@@ -117,6 +118,7 @@ impl ComparisonGenerator {
             feature_ref_name: args.feature_ref.clone(),
             baseline_results: None,
             feature_results: None,
+            expected_blocks: args.blocks,
         }
     }
 
@@ -149,13 +151,35 @@ impl ComparisonGenerator {
 
         let results = self.load_benchmark_results(ref_name, output_path)?;
 
+        // Validate that we got the expected number of blocks
+        let actual_blocks = results.summary.total_blocks;
+        if actual_blocks < self.expected_blocks {
+            return Err(eyre!(
+                "Insufficient blocks retrieved for {} reference!\n\
+                Expected: {} blocks\n\
+                Retrieved: {} blocks\n\n\
+                This may indicate an issue with the RPC endpoint or that the requested blocks are not available.\n\
+                Please verify that the RPC endpoint has the full range of blocks requested.",
+                ref_type,
+                self.expected_blocks,
+                actual_blocks
+            ));
+        }
+
+        if actual_blocks > self.expected_blocks {
+            warn!(
+                "Retrieved more blocks than expected for {} reference (expected: {}, got: {})",
+                ref_type, self.expected_blocks, actual_blocks
+            );
+        }
+
         match ref_type {
             "baseline" => self.baseline_results = Some(results),
             "feature" => self.feature_results = Some(results),
             _ => return Err(eyre!("Unknown reference type: {}", ref_type)),
         }
 
-        info!("Loaded benchmark results for {} reference", ref_type);
+        info!("Loaded benchmark results for {} reference ({} blocks)", ref_type, actual_blocks);
 
         Ok(())
     }
