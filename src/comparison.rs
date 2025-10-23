@@ -6,7 +6,7 @@ use csv::Reader;
 use eyre::{eyre, Result, WrapErr};
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::{HashMap, HashSet},
+    collections::HashMap,
     fs,
     path::{Path, PathBuf},
 };
@@ -190,13 +190,9 @@ impl ComparisonGenerator {
             .as_ref()
             .ok_or_else(|| eyre!("Feature results not loaded"))?;
 
-        // Calculate summaries for only the common blocks (for fair comparison)
-        let (filtered_baseline_summary, filtered_feature_summary) =
-            self.calculate_filtered_summaries(baseline, feature)?;
-
-        // Generate comparison using filtered summaries
+        // Generate comparison
         let comparison_summary =
-            self.calculate_comparison_summary(&filtered_baseline_summary, &filtered_feature_summary)?;
+            self.calculate_comparison_summary(&baseline.summary, &feature.summary)?;
         let per_block_comparisons = self.calculate_per_block_comparisons(baseline, feature)?;
 
         let report = ComparisonReport {
@@ -331,127 +327,6 @@ impl ComparisonGenerator {
         })
     }
 
-    /// Calculate summary statistics for only the common blocks between baseline and feature
-    /// This provides an apples-to-apples comparison
-    fn calculate_filtered_summaries(
-        &self,
-        baseline: &BenchmarkResults,
-        feature: &BenchmarkResults,
-    ) -> Result<(BenchmarkSummary, BenchmarkSummary)> {
-        // Find common block numbers
-        let baseline_blocks: HashSet<u64> = baseline
-            .combined_latency_data
-            .iter()
-            .map(|row| row.block_number)
-            .collect();
-
-        let feature_blocks: HashSet<u64> = feature
-            .combined_latency_data
-            .iter()
-            .map(|row| row.block_number)
-            .collect();
-
-        let common_blocks: HashSet<u64> = baseline_blocks
-            .intersection(&feature_blocks)
-            .copied()
-            .collect();
-
-        if common_blocks.is_empty() {
-            return Err(eyre!("No common blocks found between baseline and feature"));
-        }
-
-        info!(
-            "Found {} common blocks between baseline ({} blocks) and feature ({} blocks)",
-            common_blocks.len(),
-            baseline.combined_latency_data.len(),
-            feature.combined_latency_data.len()
-        );
-
-        // Filter baseline data to only common blocks
-        let filtered_baseline_data: Vec<CombinedLatencyRow> = baseline
-            .combined_latency_data
-            .iter()
-            .filter(|row| common_blocks.contains(&row.block_number))
-            .cloned()
-            .collect();
-
-        // Filter feature data to only common blocks
-        let filtered_feature_data: Vec<CombinedLatencyRow> = feature
-            .combined_latency_data
-            .iter()
-            .filter(|row| common_blocks.contains(&row.block_number))
-            .cloned()
-            .collect();
-
-        // Calculate summaries on filtered data
-        // For total_duration_ms and throughput metrics, we can't easily recalculate from filtered blocks
-        // since we don't have per-block timestamps, so we'll use approximations based on the filtered set
-
-        let baseline_total_blocks = filtered_baseline_data.len() as u64;
-        let baseline_total_gas_used: u64 = filtered_baseline_data.iter().map(|r| r.gas_used).sum();
-        let baseline_avg_latency_ms: f64 = filtered_baseline_data
-            .iter()
-            .map(|r| r.new_payload_latency as f64 / 1000.0)
-            .sum::<f64>()
-            / baseline_total_blocks as f64;
-
-        let feature_total_blocks = filtered_feature_data.len() as u64;
-        let feature_total_gas_used: u64 = filtered_feature_data.iter().map(|r| r.gas_used).sum();
-        let feature_avg_latency_ms: f64 = filtered_feature_data
-            .iter()
-            .map(|r| r.new_payload_latency as f64 / 1000.0)
-            .sum::<f64>()
-            / feature_total_blocks as f64;
-
-        // Estimate total duration based on sum of latencies (rough approximation)
-        let baseline_total_duration_ms = baseline_avg_latency_ms * baseline_total_blocks as f64;
-        let feature_total_duration_ms = feature_avg_latency_ms * feature_total_blocks as f64;
-
-        let baseline_duration_seconds = baseline_total_duration_ms / 1000.0;
-        let baseline_gas_per_second = if baseline_duration_seconds > 0.0 {
-            baseline_total_gas_used as f64 / baseline_duration_seconds
-        } else {
-            0.0
-        };
-        let baseline_blocks_per_second = if baseline_duration_seconds > 0.0 {
-            baseline_total_blocks as f64 / baseline_duration_seconds
-        } else {
-            0.0
-        };
-
-        let feature_duration_seconds = feature_total_duration_ms / 1000.0;
-        let feature_gas_per_second = if feature_duration_seconds > 0.0 {
-            feature_total_gas_used as f64 / feature_duration_seconds
-        } else {
-            0.0
-        };
-        let feature_blocks_per_second = if feature_duration_seconds > 0.0 {
-            feature_total_blocks as f64 / feature_duration_seconds
-        } else {
-            0.0
-        };
-
-        let baseline_summary = BenchmarkSummary {
-            total_blocks: baseline_total_blocks,
-            total_gas_used: baseline_total_gas_used,
-            total_duration_ms: baseline_total_duration_ms as u128,
-            avg_new_payload_latency_ms: baseline_avg_latency_ms,
-            gas_per_second: baseline_gas_per_second,
-            blocks_per_second: baseline_blocks_per_second,
-        };
-
-        let feature_summary = BenchmarkSummary {
-            total_blocks: feature_total_blocks,
-            total_gas_used: feature_total_gas_used,
-            total_duration_ms: feature_total_duration_ms as u128,
-            avg_new_payload_latency_ms: feature_avg_latency_ms,
-            gas_per_second: feature_gas_per_second,
-            blocks_per_second: feature_blocks_per_second,
-        };
-
-        Ok((baseline_summary, feature_summary))
-    }
-
     /// Calculate comparison summary between baseline and feature
     fn calculate_comparison_summary(
         &self,
@@ -572,12 +447,10 @@ impl ComparisonGenerator {
         println!("Baseline: {}", report.baseline.ref_name);
         println!("Feature:  {}", report.feature.ref_name);
         println!();
-        println!("Note: Percentage changes are calculated using only common blocks between baseline and feature.");
-        println!();
 
         let summary = &report.comparison_summary;
 
-        println!("Performance Changes (Common Blocks):");
+        println!("Performance Changes:");
         println!(
             "  NewPayload Latency: {:+.2}%",
             summary.new_payload_latency_change_percent
@@ -592,7 +465,7 @@ impl ComparisonGenerator {
         );
         println!();
 
-        println!("Baseline Summary (All Blocks):");
+        println!("Baseline Summary:");
         let baseline = &report.baseline.summary;
         println!(
             "  Blocks: {}, Gas: {}, Duration: {:.2}s",
@@ -609,7 +482,7 @@ impl ComparisonGenerator {
         }
         println!();
 
-        println!("Feature Summary (All Blocks):");
+        println!("Feature Summary:");
         let feature = &report.feature.summary;
         println!(
             "  Blocks: {}, Gas: {}, Duration: {:.2}s",
