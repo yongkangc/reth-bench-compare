@@ -94,6 +94,11 @@ pub struct Args {
     #[arg(long, value_name = "N")]
     pub warmup_blocks: Option<u64>,
 
+    /// Disable filesystem cache clearing before warmup phase.
+    /// By default, filesystem caches are cleared before warmup to ensure consistent benchmarks.
+    #[arg(long)]
+    pub no_clear_cache: bool,
+
     #[command(flatten)]
     pub logs: LogArgs,
 
